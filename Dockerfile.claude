@@ -1,0 +1,41 @@
+# Dockerfile.claude
+# Builds the container image used by ClaudeJob and ClaudeSession pods.
+# Claude Code is distributed as an npm package (@anthropic-ai/claude-code)
+# and ships as a self-contained Node.js binary — no Anthropic-published image exists.
+#
+# Build:
+#   make claude-build CLAUDE_IMG=ghcr.io/your-org/claude-code:latest
+# Push:
+#   make claude-push  CLAUDE_IMG=ghcr.io/your-org/claude-code:latest
+
+ARG NODE_VERSION=22
+FROM node:${NODE_VERSION}-slim
+
+ARG CLAUDE_VERSION=latest
+
+# git is required by claude for workspace trust checks and worktree operations.
+# ca-certificates is required for TLS to the Anthropic API.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      git \
+      ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install claude globally. Pinning to a specific version is recommended for
+# reproducible builds — set CLAUDE_VERSION at build time:
+#   make claude-build CLAUDE_VERSION=2.1.86
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION} \
+    && claude --version
+
+# Create a non-root user. Claude Code writes to ~/.claude so the home
+# directory must be writable.
+RUN useradd --create-home --uid 1000 --shell /bin/bash user
+USER user
+WORKDIR /home/user
+
+# Credentials are mounted read-only at runtime by the operator:
+#   /home/user/.claude/.credentials.json  (OAuth mode)
+# or injected as ANTHROPIC_API_KEY env var (API key mode).
+#
+# The default entrypoint is the claude binary; individual pods override
+# the command (e.g. claude --print ... or claude remote-control ...).
+ENTRYPOINT ["claude"]

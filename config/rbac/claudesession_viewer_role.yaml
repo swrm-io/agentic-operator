@@ -1,0 +1,23 @@
+# permissions for end users to view claudesessions.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: agentic-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: claudesession-viewer-role
+rules:
+- apiGroups:
+  - agentic.swrm.io
+  resources:
+  - claudesessions
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - agentic.swrm.io
+  resources:
+  - claudesessions/status
+  verbs:
+  - get

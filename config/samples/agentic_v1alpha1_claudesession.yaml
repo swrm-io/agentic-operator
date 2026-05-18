@@ -1,0 +1,21 @@
+apiVersion: agentic.swrm.io/v1alpha1
+kind: ClaudeSession
+metadata:
+  name: my-session
+  namespace: default
+spec:
+  sessionName: "My Remote Session"
+  image: ghcr.io/swrm-io/claude-code:latest
+  credentialsSecret:
+    name: claude-credentials
+    key: credentials.json
+  workDir: /workspace
+  spawn: same-dir
+  # Optional: mount a PVC with the project to work on
+  # volumes:
+  #   - name: workspace
+  #     persistentVolumeClaim:
+  #       claimName: my-workspace-pvc
+  # volumeMounts:
+  #   - name: workspace
+  #     mountPath: /workspace

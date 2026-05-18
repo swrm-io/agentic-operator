@@ -1,0 +1,38 @@
+---
+# OAuth auth mode — uses claude.ai login credentials (supports token auto-refresh)
+# Create the secret with:
+#   kubectl create secret generic claude-credentials \
+#     --from-file=credentials.json=$HOME/.claude/.credentials.json
+#   kubectl label secret claude-credentials agentic.swrm.io/token-refresh=enabled
+apiVersion: agentic.swrm.io/v1alpha1
+kind: ClaudeJob
+metadata:
+  name: daily-review-oauth
+  namespace: default
+spec:
+  schedule: "0 9 * * *"
+  prompt: "Review open PRs in this repository and summarize findings"
+  image: ghcr.io/swrm-io/claude-code:latest
+  auth:
+    credentialsSecret:
+      name: claude-credentials
+      key: credentials.json
+  workDir: /workspace
+---
+# API key auth mode — uses ANTHROPIC_API_KEY from a secret
+# Create the secret with:
+#   kubectl create secret generic anthropic-api-key --from-literal=key=sk-ant-...
+apiVersion: agentic.swrm.io/v1alpha1
+kind: ClaudeJob
+metadata:
+  name: daily-review-apikey
+  namespace: default
+spec:
+  schedule: "0 9 * * *"
+  prompt: "Review open PRs in this repository and summarize findings"
+  image: ghcr.io/swrm-io/claude-code:latest
+  auth:
+    apiKeySecret:
+      name: anthropic-api-key
+      key: key
+  workDir: /workspace

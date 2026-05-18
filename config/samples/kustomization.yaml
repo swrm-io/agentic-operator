@@ -1,0 +1,5 @@
+## Append samples of your project ##
+resources:
+- agentic_v1alpha1_claudejob.yaml
+- agentic_v1alpha1_claudesession.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples
