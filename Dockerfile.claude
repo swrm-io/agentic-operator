@@ -26,14 +26,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION} \
     && claude --version
 
-# Create a non-root user. Claude Code writes to ~/.claude so the home
-# directory must be writable.
-RUN useradd --create-home --uid 1000 --shell /bin/bash user
-USER user
-WORKDIR /home/user
+# node:22-slim ships with a non-root 'node' user at UID 1000.
+# Claude Code writes to ~/.claude so the home directory must be writable.
+USER node
+WORKDIR /home/node
 
 # Credentials are mounted read-only at runtime by the operator:
-#   /home/user/.claude/.credentials.json  (OAuth mode)
+#   /home/node/.claude/.credentials.json  (OAuth mode)
 # or injected as ANTHROPIC_API_KEY env var (API key mode).
 #
 # The default entrypoint is the claude binary; individual pods override

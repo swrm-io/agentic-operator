@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	claudeCredentialsMountPath = "/home/user/.claude/.credentials.json"
+	claudeCredentialsMountPath = "/home/node/.claude/.credentials.json"
 	claudeJobFinalizer         = "agentic.swrm.io/claudejob-finalizer"
 )
 
