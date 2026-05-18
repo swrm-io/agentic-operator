@@ -1,0 +1,16 @@
+apiVersion: v2
+name: agentic-operator
+description: Kubernetes operator for running Claude Code workloads on-cluster.
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+keywords:
+  - claude
+  - ai
+  - operator
+  - kubernetes
+sources:
+  - https://github.com/swrm-io/agentic-operator
+maintainers:
+  - name: swrm-io
+    url: https://github.com/swrm-io

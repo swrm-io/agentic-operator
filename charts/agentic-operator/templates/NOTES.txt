@@ -1,0 +1,38 @@
+agentic-operator has been deployed.
+
+Operator namespace: {{ include "agentic-operator.namespace" . }}
+Operator pod:       {{ include "agentic-operator.fullname" . }}
+
+To create a scheduled Claude Code job:
+
+  kubectl apply -f - <<EOF
+  apiVersion: agentic.swrm.io/v1alpha1
+  kind: ClaudeJob
+  metadata:
+    name: my-job
+    namespace: <your-namespace>
+  spec:
+    schedule: "0 9 * * *"
+    prompt: "Your prompt here"
+    auth:
+      credentialsSecret:
+        name: claude-credentials
+        key: credentials.json
+  EOF
+
+To create a persistent Remote Control session:
+
+  kubectl apply -f - <<EOF
+  apiVersion: agentic.swrm.io/v1alpha1
+  kind: ClaudeSession
+  metadata:
+    name: my-session
+    namespace: <your-namespace>
+  spec:
+    sessionName: "My Session"
+    credentialsSecret:
+      name: claude-credentials
+      key: credentials.json
+  EOF
+
+See https://github.com/swrm-io/agentic-operator for full documentation.

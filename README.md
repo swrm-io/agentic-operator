@@ -137,6 +137,34 @@ Set the resulting image in your CRs via `spec.image`.
 - Access to a Kubernetes v1.33+ cluster (built against 1.35)
 - operator-sdk v1.39+
 
+### Helm (recommended)
+
+```bash
+# Install into a dedicated namespace (creates it if it doesn't exist)
+helm install agentic-operator charts/agentic-operator \
+  --namespace agentic-operator-system \
+  --create-namespace \
+  --set image.repository=ghcr.io/swrm-io/agentic-operator \
+  --set image.tag=0.0.1
+
+# Or via make
+make helm-install IMG=ghcr.io/swrm-io/agentic-operator:0.0.1
+
+# Uninstall
+make helm-uninstall
+```
+
+Key values:
+
+| Value | Default | Description |
+|---|---|---|
+| `image.repository` | `ghcr.io/swrm-io/agentic-operator` | Operator image |
+| `image.tag` | chart `appVersion` | Image tag |
+| `replicaCount` | `1` | Manager replicas |
+| `leaderElection` | `true` | Enable leader election |
+| `installCRDs` | `true` | Install CRDs with the chart |
+| `resources` | see values.yaml | Manager resource requests/limits |
+
 ### Run locally against your cluster
 
 ```bash

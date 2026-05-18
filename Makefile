@@ -173,6 +173,31 @@ claude-buildx: ## Build and push the Claude Code image for multiple platforms (a
 		--tag $(CLAUDE_IMG) \
 		-f Dockerfile.claude .
 
+# Helm chart targets
+HELM_CHART_DIR ?= charts/agentic-operator
+HELM_RELEASE   ?= agentic-operator
+HELM_NAMESPACE ?= agentic-operator-system
+
+.PHONY: helm-lint
+helm-lint: ## Lint the Helm chart.
+	helm lint $(HELM_CHART_DIR)
+
+.PHONY: helm-template
+helm-template: ## Render the Helm chart templates to stdout.
+	helm template $(HELM_RELEASE) $(HELM_CHART_DIR) --namespace $(HELM_NAMESPACE)
+
+.PHONY: helm-install
+helm-install: ## Install or upgrade the operator via Helm.
+	helm upgrade --install $(HELM_RELEASE) $(HELM_CHART_DIR) \
+		--namespace $(HELM_NAMESPACE) \
+		--create-namespace \
+		--set image.repository=$(IMAGE_TAG_BASE) \
+		--set image.tag=$(VERSION)
+
+.PHONY: helm-uninstall
+helm-uninstall: ## Uninstall the operator Helm release.
+	helm uninstall $(HELM_RELEASE) --namespace $(HELM_NAMESPACE)
+
 # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
 # architectures. (i.e. make docker-buildx IMG=myregistry/mypoperator:0.0.1). To use this option you need to:
 # - be able to use docker buildx. More info: https://docs.docker.com/build/buildx/
