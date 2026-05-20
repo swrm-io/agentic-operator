@@ -27,7 +27,10 @@ RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION} \
     && claude --version
 
 # node:22-slim ships with a non-root 'node' user at UID 1000.
-# Claude Code writes to ~/.claude so the home directory must be writable.
+# Pre-create ~/.claude owned by node so the secret volume mount lands in a
+# directory the process can write to (Kubernetes creates the mount point as
+# root if the directory doesn't already exist in the image).
+RUN mkdir -p /home/node/.claude
 USER node
 WORKDIR /home/node
 
