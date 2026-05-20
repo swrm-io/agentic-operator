@@ -2,6 +2,26 @@ apiVersion: v1
 entries:
   agentic-operator:
   - apiVersion: v2
+    appVersion: 0.1.1
+    created: "2026-05-20T08:40:32.899283936Z"
+    description: Kubernetes operator for running Claude Code workloads on-cluster.
+    digest: f60abe8cdfec68bd2191526119a3efe10277858b529c8cb3cb34c0cdbc4385de
+    keywords:
+    - claude
+    - ai
+    - operator
+    - kubernetes
+    maintainers:
+    - name: swrm-io
+      url: https://github.com/swrm-io
+    name: agentic-operator
+    sources:
+    - https://github.com/swrm-io/agentic-operator
+    type: application
+    urls:
+    - https://github.com/swrm-io/agentic-operator/releases/download/agentic-operator-0.1.1/agentic-operator-0.1.1.tgz
+    version: 0.1.1
+  - apiVersion: v2
     appVersion: 0.0.1
     created: "2026-05-18T15:32:02.508867206Z"
     description: Kubernetes operator for running Claude Code workloads on-cluster.
@@ -21,4 +41,4 @@ entries:
     urls:
     - https://github.com/swrm-io/agentic-operator/releases/download/agentic-operator-0.1.0/agentic-operator-0.1.0.tgz
     version: 0.1.0
-generated: "2026-05-18T15:32:02.508894377Z"
+generated: "2026-05-20T08:40:32.899295718Z"
