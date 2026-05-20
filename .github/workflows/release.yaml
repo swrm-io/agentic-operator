@@ -45,7 +45,7 @@ jobs:
             ${{ env.OPERATOR_IMAGE }}:${{ steps.meta.outputs.tag }}
             ${{ env.OPERATOR_IMAGE }}:latest
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=min
 
   build-claude:
     name: Build and push claude-code image
@@ -81,7 +81,7 @@ jobs:
             ${{ env.CLAUDE_IMAGE }}:${{ steps.meta.outputs.tag }}
             ${{ env.CLAUDE_IMAGE }}:latest
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=min
 
   release:
     name: Create GitHub release with binaries
