@@ -3,7 +3,7 @@ name: agentic-operator
 description: Kubernetes operator for running Claude Code workloads on-cluster.
 type: application
 version: 0.1.0
-appVersion: "0.0.1"
+appVersion: "0.1.0"
 keywords:
   - claude
   - ai
