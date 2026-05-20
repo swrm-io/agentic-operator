@@ -120,7 +120,11 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 					Items: []corev1.KeyToPath{
 						{
 							Key:  session.Spec.CredentialsSecret.Key,
-							Path: ".credentials.json",
+							Path: "credentials.json",
+						},
+						{
+							Key:  "claude.json",
+							Path: "claude.json",
 						},
 					},
 				},
@@ -131,8 +135,14 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 	volumeMounts := append([]corev1.VolumeMount{
 		{
 			Name:      credentialsVolumeName,
-			MountPath: claudeCredentialsMountPath,
-			SubPath:   ".credentials.json",
+			MountPath: claudeConfigDir + "/.credentials.json",
+			SubPath:   "credentials.json",
+			ReadOnly:  true,
+		},
+		{
+			Name:      credentialsVolumeName,
+			MountPath: claudeConfigFile,
+			SubPath:   "claude.json",
 			ReadOnly:  true,
 		},
 	}, session.Spec.VolumeMounts...)

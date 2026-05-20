@@ -19,8 +19,12 @@ import (
 )
 
 const (
-	claudeCredentialsMountPath = "/home/node/.claude/.credentials.json"
-	claudeJobFinalizer         = "agentic.swrm.io/claudejob-finalizer"
+	// claudeConfigMountPath is the directory claude reads for credentials and
+	// account state. The secret is mounted here as a directory so that both
+	// .credentials.json and .claude.json land in the right place.
+	claudeConfigDir  = "/home/node/.claude"
+	claudeConfigFile = "/home/node/.claude.json"
+	claudeJobFinalizer = "agentic.swrm.io/claudejob-finalizer"
 )
 
 // ClaudeJobReconciler reconciles a ClaudeJob object
@@ -163,7 +167,11 @@ func (r *ClaudeJobReconciler) buildCronJob(job *agenticiov1alpha1.ClaudeJob) *ba
 // whichever auth mode the job is configured with.
 func (r *ClaudeJobReconciler) buildAuthMounts(job *agenticiov1alpha1.ClaudeJob) ([]corev1.Volume, []corev1.VolumeMount, []corev1.EnvVar) {
 	if job.Spec.Auth.CredentialsSecret != nil {
-		// OAuth mode: mount credentials file at the path Claude Code expects
+		// OAuth mode: mount credentials and account state files.
+		// .credentials.json holds the OAuth tokens; .claude.json holds account
+		// metadata (organizationUuid etc.) that claude reads for feature eligibility.
+		// Both are stored as keys in the same secret and mounted individually so
+		// the rest of ~/.claude/ remains a writable emptyDir.
 		vol := corev1.Volume{
 			Name: "claude-credentials",
 			VolumeSource: corev1.VolumeSource{
@@ -172,19 +180,31 @@ func (r *ClaudeJobReconciler) buildAuthMounts(job *agenticiov1alpha1.ClaudeJob) 
 					Items: []corev1.KeyToPath{
 						{
 							Key:  job.Spec.Auth.CredentialsSecret.Key,
-							Path: ".credentials.json",
+							Path: "credentials.json",
+						},
+						{
+							Key:  "claude.json",
+							Path: "claude.json",
 						},
 					},
 				},
 			},
 		}
-		mount := corev1.VolumeMount{
-			Name:      "claude-credentials",
-			MountPath: claudeCredentialsMountPath,
-			SubPath:   ".credentials.json",
-			ReadOnly:  true,
+		mounts := []corev1.VolumeMount{
+			{
+				Name:      "claude-credentials",
+				MountPath: claudeConfigDir + "/.credentials.json",
+				SubPath:   "credentials.json",
+				ReadOnly:  true,
+			},
+			{
+				Name:      "claude-credentials",
+				MountPath: claudeConfigFile,
+				SubPath:   "claude.json",
+				ReadOnly:  true,
+			},
 		}
-		return []corev1.Volume{vol}, []corev1.VolumeMount{mount}, nil
+		return []corev1.Volume{vol}, mounts, nil
 	}
 
 	// API key mode: inject ANTHROPIC_API_KEY from secret
