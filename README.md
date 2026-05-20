@@ -26,13 +26,13 @@ Required for `ClaudeSession`. Supported for `ClaudeJob`. Enables automatic token
 # Log in on any machine
 claude /login
 
-# Create the secret from your local credentials.
-# credentials.json holds the OAuth tokens; claude.json holds account metadata
-# (organization UUID etc.) that Claude Code reads for feature eligibility checks
-# such as Remote Control. Both files are required.
+# Get your organization UUID (required for Remote Control eligibility)
+ORG_ID=$(cat $HOME/.claude.json | python3 -c "import json,sys; print(json.load(sys.stdin)['oauthAccount']['organizationUuid'])")
+
+# Create the secret
 kubectl create secret generic claude-credentials \
   --from-file=credentials.json=$HOME/.claude/.credentials.json \
-  --from-file=claude.json=$HOME/.claude.json
+  --from-literal=organizationId=$ORG_ID
 
 # Opt in to automatic token refresh
 kubectl label secret claude-credentials agentic.swrm.io/token-refresh=enabled

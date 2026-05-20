@@ -19,11 +19,7 @@ import (
 )
 
 const (
-	// claudeConfigMountPath is the directory claude reads for credentials and
-	// account state. The secret is mounted here as a directory so that both
-	// .credentials.json and .claude.json land in the right place.
-	claudeConfigDir  = "/home/node/.claude"
-	claudeConfigFile = "/home/node/.claude.json"
+	claudeConfigDir    = "/home/node/.claude"
 	claudeJobFinalizer = "agentic.swrm.io/claudejob-finalizer"
 )
 
@@ -167,11 +163,10 @@ func (r *ClaudeJobReconciler) buildCronJob(job *agenticiov1alpha1.ClaudeJob) *ba
 // whichever auth mode the job is configured with.
 func (r *ClaudeJobReconciler) buildAuthMounts(job *agenticiov1alpha1.ClaudeJob) ([]corev1.Volume, []corev1.VolumeMount, []corev1.EnvVar) {
 	if job.Spec.Auth.CredentialsSecret != nil {
-		// OAuth mode: mount credentials and account state files.
-		// .credentials.json holds the OAuth tokens; .claude.json holds account
-		// metadata (organizationUuid etc.) that claude reads for feature eligibility.
-		// Both are stored as keys in the same secret and mounted individually so
-		// the rest of ~/.claude/ remains a writable emptyDir.
+		// OAuth mode: mount credentials file and inject ANTHROPIC_ORGANIZATION_ID.
+		// The org ID is required for Remote Control eligibility checks; claude reads
+		// it from the env var rather than ~/.claude.json so we avoid storing the
+		// full account metadata file in the secret.
 		vol := corev1.Volume{
 			Name: "claude-credentials",
 			VolumeSource: corev1.VolumeSource{
@@ -182,29 +177,28 @@ func (r *ClaudeJobReconciler) buildAuthMounts(job *agenticiov1alpha1.ClaudeJob) 
 							Key:  job.Spec.Auth.CredentialsSecret.Key,
 							Path: "credentials.json",
 						},
-						{
-							Key:  "claude.json",
-							Path: "claude.json",
-						},
 					},
 				},
 			},
 		}
-		mounts := []corev1.VolumeMount{
-			{
-				Name:      "claude-credentials",
-				MountPath: claudeConfigDir + "/.credentials.json",
-				SubPath:   "credentials.json",
-				ReadOnly:  true,
-			},
-			{
-				Name:      "claude-credentials",
-				MountPath: claudeConfigFile,
-				SubPath:   "claude.json",
-				ReadOnly:  true,
+		mount := corev1.VolumeMount{
+			Name:      "claude-credentials",
+			MountPath: claudeConfigDir + "/.credentials.json",
+			SubPath:   "credentials.json",
+			ReadOnly:  true,
+		}
+		orgEnv := corev1.EnvVar{
+			Name: "ANTHROPIC_ORGANIZATION_ID",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: job.Spec.Auth.CredentialsSecret.Name,
+					},
+					Key: "organizationId",
+				},
 			},
 		}
-		return []corev1.Volume{vol}, mounts, nil
+		return []corev1.Volume{vol}, []corev1.VolumeMount{mount}, []corev1.EnvVar{orgEnv}
 	}
 
 	// API key mode: inject ANTHROPIC_API_KEY from secret

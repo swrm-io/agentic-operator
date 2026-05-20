@@ -122,10 +122,6 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 							Key:  session.Spec.CredentialsSecret.Key,
 							Path: "credentials.json",
 						},
-						{
-							Key:  "claude.json",
-							Path: "claude.json",
-						},
 					},
 				},
 			},
@@ -139,13 +135,21 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 			SubPath:   "credentials.json",
 			ReadOnly:  true,
 		},
-		{
-			Name:      credentialsVolumeName,
-			MountPath: claudeConfigFile,
-			SubPath:   "claude.json",
-			ReadOnly:  true,
-		},
 	}, session.Spec.VolumeMounts...)
+
+	env := append([]corev1.EnvVar{
+		{
+			Name: "ANTHROPIC_ORGANIZATION_ID",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: session.Spec.CredentialsSecret.Name,
+					},
+					Key: "organizationId",
+				},
+			},
+		},
+	}, session.Spec.Env...)
 
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -164,7 +168,7 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 					Name:         "claude",
 					Image:        session.Spec.Image,
 					WorkingDir:   session.Spec.WorkDir,
-					Env:          session.Spec.Env,
+					Env:          env,
 					VolumeMounts: volumeMounts,
 					Command: []string{
 						"claude",
