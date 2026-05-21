@@ -2,8 +2,8 @@ apiVersion: v2
 name: agentic-operator
 description: Kubernetes operator for running Claude Code workloads on-cluster.
 type: application
-version: 0.1.6
-appVersion: "0.1.6"
+version: 0.1.7
+appVersion: "0.1.7"
 keywords:
   - claude
   - ai
