@@ -24,13 +24,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # reproducible builds — set CLAUDE_VERSION at build time:
 #   make claude-build CLAUDE_VERSION=2.1.86
 RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION} \
-    && claude --version
+    && claude --version \
+    && mkdir -p /home/node/.claude
 
 # node:22-slim ships with a non-root 'node' user at UID 1000.
-# Pre-create ~/.claude owned by node so the secret volume mount lands in a
-# directory the process can write to (Kubernetes creates the mount point as
-# root if the directory doesn't already exist in the image).
-RUN mkdir -p /home/node/.claude
 USER node
 WORKDIR /home/node
 
