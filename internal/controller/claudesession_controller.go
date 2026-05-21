@@ -110,6 +110,7 @@ func (r *ClaudeSessionReconciler) reconcilePod(ctx context.Context, session *age
 
 func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSession) *corev1.Pod {
 	credentialsVolumeName := "claude-credentials"
+	claudeHomeVolume := "claude-home"
 
 	volumes := append([]corev1.Volume{
 		{
@@ -126,6 +127,14 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 				},
 			},
 		},
+		{
+			// emptyDir shared between init container and main container.
+			// The init container writes ~/.claude.json with minimal account
+			// metadata (organizationUuid) that claude requires for Remote
+			// Control eligibility checks.
+			Name:         claudeHomeVolume,
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		},
 	}, session.Spec.Volumes...)
 
 	volumeMounts := append([]corev1.VolumeMount{
@@ -135,21 +144,12 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 			SubPath:   "credentials.json",
 			ReadOnly:  true,
 		},
-	}, session.Spec.VolumeMounts...)
-
-	env := append([]corev1.EnvVar{
 		{
-			Name: "ANTHROPIC_ORGANIZATION_ID",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: session.Spec.CredentialsSecret.Name,
-					},
-					Key: "organizationId",
-				},
-			},
+			Name:      claudeHomeVolume,
+			MountPath: "/home/node/.claude.json",
+			SubPath:   ".claude.json",
 		},
-	}, session.Spec.Env...)
+	}, session.Spec.VolumeMounts...)
 
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -163,12 +163,41 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 		Spec: corev1.PodSpec{
 			RestartPolicy: corev1.RestartPolicyAlways,
 			Volumes:       volumes,
+			InitContainers: []corev1.Container{
+				{
+					Name:    "claude-config-init",
+					Image:   "busybox:1",
+					Command: []string{"sh", "-c"},
+					Args: []string{
+						`printf '{"oauthAccount":{"organizationUuid":"%s"}}' "$ORG_ID" > /claude-home/.claude.json`,
+					},
+					Env: []corev1.EnvVar{
+						{
+							Name: "ORG_ID",
+							ValueFrom: &corev1.EnvVarSource{
+								SecretKeyRef: &corev1.SecretKeySelector{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: session.Spec.CredentialsSecret.Name,
+									},
+									Key: "organizationId",
+								},
+							},
+						},
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      claudeHomeVolume,
+							MountPath: "/claude-home",
+						},
+					},
+				},
+			},
 			Containers: []corev1.Container{
 				{
 					Name:         "claude",
 					Image:        session.Spec.Image,
 					WorkingDir:   session.Spec.WorkDir,
-					Env:          env,
+					Env:          session.Spec.Env,
 					VolumeMounts: volumeMounts,
 					Command: []string{
 						"claude",

@@ -136,6 +136,7 @@ func (r *ClaudeJobReconciler) buildCronJob(job *agenticiov1alpha1.ClaudeJob) *ba
 						Spec: corev1.PodSpec{
 							RestartPolicy: corev1.RestartPolicyOnFailure,
 							Volumes:       volumes,
+							InitContainers: r.buildConfigInitContainer(job),
 							Containers: []corev1.Container{
 								{
 									Name:         "claude",
@@ -159,46 +160,85 @@ func (r *ClaudeJobReconciler) buildCronJob(job *agenticiov1alpha1.ClaudeJob) *ba
 	}
 }
 
-// buildAuthMounts returns the volumes, volumeMounts, and env vars needed for
-// whichever auth mode the job is configured with.
-func (r *ClaudeJobReconciler) buildAuthMounts(job *agenticiov1alpha1.ClaudeJob) ([]corev1.Volume, []corev1.VolumeMount, []corev1.EnvVar) {
-	if job.Spec.Auth.CredentialsSecret != nil {
-		// OAuth mode: mount credentials file and inject ANTHROPIC_ORGANIZATION_ID.
-		// The org ID is required for Remote Control eligibility checks; claude reads
-		// it from the env var rather than ~/.claude.json so we avoid storing the
-		// full account metadata file in the secret.
-		vol := corev1.Volume{
-			Name: "claude-credentials",
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: job.Spec.Auth.CredentialsSecret.Name,
-					Items: []corev1.KeyToPath{
-						{
-							Key:  job.Spec.Auth.CredentialsSecret.Key,
-							Path: "credentials.json",
+// buildConfigInitContainer returns an init container that writes a minimal
+// ~/.claude.json containing the organizationUuid. Only used in OAuth mode.
+func (r *ClaudeJobReconciler) buildConfigInitContainer(job *agenticiov1alpha1.ClaudeJob) []corev1.Container {
+	if job.Spec.Auth.CredentialsSecret == nil {
+		return nil
+	}
+	return []corev1.Container{
+		{
+			Name:    "claude-config-init",
+			Image:   "busybox:1",
+			Command: []string{"sh", "-c"},
+			Args: []string{
+				`printf '{"oauthAccount":{"organizationUuid":"%s"}}' "$ORG_ID" > /claude-home/.claude.json`,
+			},
+			Env: []corev1.EnvVar{
+				{
+					Name: "ORG_ID",
+					ValueFrom: &corev1.EnvVarSource{
+						SecretKeyRef: &corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: job.Spec.Auth.CredentialsSecret.Name,
+							},
+							Key: "organizationId",
 						},
 					},
 				},
 			},
-		}
-		mount := corev1.VolumeMount{
-			Name:      "claude-credentials",
-			MountPath: claudeConfigDir + "/.credentials.json",
-			SubPath:   "credentials.json",
-			ReadOnly:  true,
-		}
-		orgEnv := corev1.EnvVar{
-			Name: "ANTHROPIC_ORGANIZATION_ID",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: job.Spec.Auth.CredentialsSecret.Name,
-					},
-					Key: "organizationId",
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "claude-home",
+					MountPath: "/claude-home",
 				},
 			},
+		},
+	}
+}
+
+// buildAuthMounts returns the volumes, volumeMounts, and env vars needed for
+// whichever auth mode the job is configured with.
+func (r *ClaudeJobReconciler) buildAuthMounts(job *agenticiov1alpha1.ClaudeJob) ([]corev1.Volume, []corev1.VolumeMount, []corev1.EnvVar) {
+	if job.Spec.Auth.CredentialsSecret != nil {
+		// OAuth mode: mount credentials file and a generated minimal .claude.json.
+		// claude checks oauthAccount.organizationUuid in ~/.claude.json for feature
+		// eligibility. An init container writes a minimal file from the organizationId
+		// secret key so we avoid storing the full ~/.claude.json in the secret.
+		vols := []corev1.Volume{
+			{
+				Name: "claude-credentials",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: job.Spec.Auth.CredentialsSecret.Name,
+						Items: []corev1.KeyToPath{
+							{
+								Key:  job.Spec.Auth.CredentialsSecret.Key,
+								Path: "credentials.json",
+							},
+						},
+					},
+				},
+			},
+			{
+				Name:         "claude-home",
+				VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+			},
 		}
-		return []corev1.Volume{vol}, []corev1.VolumeMount{mount}, []corev1.EnvVar{orgEnv}
+		mounts := []corev1.VolumeMount{
+			{
+				Name:      "claude-credentials",
+				MountPath: claudeConfigDir + "/.credentials.json",
+				SubPath:   "credentials.json",
+				ReadOnly:  true,
+			},
+			{
+				Name:      "claude-home",
+				MountPath: "/home/node/.claude.json",
+				SubPath:   ".claude.json",
+			},
+		}
+		return vols, mounts, nil
 	}
 
 	// API key mode: inject ANTHROPIC_API_KEY from secret
