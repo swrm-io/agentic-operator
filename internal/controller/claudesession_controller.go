@@ -169,7 +169,7 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 					Image:   "busybox:1",
 					Command: []string{"sh", "-c"},
 					Args: []string{
-						`printf '{"hasCompletedOnboarding":true,"oauthAccount":{"organizationUuid":"%s"},"projects":{"%s":{"hasTrustDialogAccepted":true,"allowedTools":[],"mcpServers":{}}}}' "$ORG_ID" "$WORK_DIR" > /claude-home/.claude.json`,
+						`printf '{"hasCompletedOnboarding":true,"remoteControlAtStartup":true,"oauthAccount":{"organizationUuid":"%s"},"projects":{"%s":{"hasTrustDialogAccepted":true,"allowedTools":[],"mcpServers":{}}}}' "$ORG_ID" "$WORK_DIR" > /claude-home/.claude.json`,
 					},
 					Env: []corev1.EnvVar{
 						{
