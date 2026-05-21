@@ -172,7 +172,7 @@ func (r *ClaudeJobReconciler) buildConfigInitContainer(job *agenticiov1alpha1.Cl
 			Image:   "busybox:1",
 			Command: []string{"sh", "-c"},
 			Args: []string{
-				`printf '{"oauthAccount":{"organizationUuid":"%s"}}' "$ORG_ID" > /claude-home/.claude.json`,
+				`printf '{"hasCompletedOnboarding":true,"oauthAccount":{"organizationUuid":"%s"},"projects":{"%s":{"hasTrustDialogAccepted":true,"allowedTools":[],"mcpServers":{}}}}' "$ORG_ID" "$WORK_DIR" > /claude-home/.claude.json`,
 			},
 			Env: []corev1.EnvVar{
 				{
@@ -185,6 +185,10 @@ func (r *ClaudeJobReconciler) buildConfigInitContainer(job *agenticiov1alpha1.Cl
 							Key: "organizationId",
 						},
 					},
+				},
+				{
+					Name:  "WORK_DIR",
+					Value: job.Spec.WorkDir,
 				},
 			},
 			VolumeMounts: []corev1.VolumeMount{
