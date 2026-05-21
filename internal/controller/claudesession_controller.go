@@ -149,11 +149,6 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 			MountPath: "/home/node/.claude.json",
 			SubPath:   ".claude.json",
 		},
-		{
-			Name:      claudeHomeVolume,
-			MountPath: "/home/node/.claude/settings.json",
-			SubPath:   "settings.json",
-		},
 	}, session.Spec.VolumeMounts...)
 
 	return &corev1.Pod{
@@ -174,7 +169,7 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 					Image:   "busybox:1",
 					Command: []string{"sh", "-c"},
 					Args: []string{
-						`printf '{"hasCompletedOnboarding":true,"remoteControlAtStartup":true,"oauthAccount":{"organizationUuid":"%s"},"projects":{"%s":{"hasTrustDialogAccepted":true,"allowedTools":[],"mcpServers":{}}}}' "$ORG_ID" "$WORK_DIR" > /claude-home/.claude.json && printf '{"remoteDialogSeen":true}' > /claude-home/settings.json`,
+						`printf '{"hasCompletedOnboarding":true,"remoteDialogSeen":true,"remoteControlAtStartup":true,"oauthAccount":{"organizationUuid":"%s"},"projects":{"%s":{"hasTrustDialogAccepted":true,"allowedTools":[],"mcpServers":{}}}}' "$ORG_ID" "$WORK_DIR" > /claude-home/.claude.json`,
 					},
 					Env: []corev1.EnvVar{
 						{
