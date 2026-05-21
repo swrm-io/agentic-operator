@@ -172,7 +172,7 @@ func (r *ClaudeJobReconciler) buildConfigInitContainer(job *agenticiov1alpha1.Cl
 			Image:   "busybox:1",
 			Command: []string{"sh", "-c"},
 			Args: []string{
-				`printf '{"hasCompletedOnboarding":true,"remoteControlAtStartup":true,"oauthAccount":{"organizationUuid":"%s"},"projects":{"%s":{"hasTrustDialogAccepted":true,"allowedTools":[],"mcpServers":{}}}}' "$ORG_ID" "$WORK_DIR" > /claude-home/.claude.json`,
+				`printf '{"hasCompletedOnboarding":true,"remoteControlAtStartup":true,"oauthAccount":{"organizationUuid":"%s"},"projects":{"%s":{"hasTrustDialogAccepted":true,"remoteDialogSeen":true,"allowedTools":[],"mcpServers":{}}}}' "$ORG_ID" "$WORK_DIR" > /claude-home/.claude.json`,
 			},
 			Env: []corev1.EnvVar{
 				{
