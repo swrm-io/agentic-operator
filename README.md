@@ -94,6 +94,40 @@ spec:
 
 After creating a `ClaudeSession`, connect to it from [claude.ai/code](https://claude.ai/code) or the Claude mobile app — the session will appear in the session list under the configured `sessionName`.
 
+### MCP Servers
+
+Both `ClaudeJob` and `ClaudeSession` support running MCP servers as sidecars via `spec.mcpServers`. Each server runs in its own container and communicates with Claude via a Unix socket at `/mcp-sockets/<name>.sock`. The operator writes the socket paths into `.claude.json` at startup so Claude picks them up automatically.
+
+```yaml
+apiVersion: agentic.swrm.io/v1alpha1
+kind: ClaudeSession
+metadata:
+  name: my-session
+spec:
+  sessionName: "My Remote Session"
+  credentialsSecret:
+    name: claude-credentials
+    key: credentials.json
+  mcpServers:
+    - name: filesystem
+      image: ghcr.io/some-org/mcp-filesystem:latest
+    - name: github
+      image: ghcr.io/some-org/mcp-github:latest
+      env:
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-token
+              key: token
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `name` | yes | Unique identifier — used as the socket filename and mcpServers key. Must match `^[a-z0-9-]+$` |
+| `image` | yes | Container image for the MCP server |
+| `env` | no | Environment variables for the sidecar |
+| `args` | no | Arguments passed to the sidecar container |
+
 ## Token Refresh
 
 The operator maintains an in-memory cache of `expiresAt` per credentials Secret and sleeps until the next token is actually due for refresh — no periodic polling. When a token is within 5 minutes of expiry it calls `POST https://platform.claude.com/v1/oauth/token` with `grant_type=refresh_token` and writes the new access token, refresh token, and expiry back to the Secret.
