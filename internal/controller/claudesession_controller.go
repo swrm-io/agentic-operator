@@ -171,6 +171,9 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 					Args: []string{
 						`printf '{"hasCompletedOnboarding":true,"remoteDialogSeen":true,"remoteControlAtStartup":true,"oauthAccount":{"organizationUuid":"%s"},"projects":{"%s":{"hasTrustDialogAccepted":true,"allowedTools":[],"mcpServers":{}}}}' "$ORG_ID" "$WORK_DIR" > /claude-home/.claude.json`,
 					},
+					SecurityContext: &corev1.SecurityContext{
+						RunAsUser: func() *int64 { uid := int64(1000); return &uid }(),
+					},
 					Env: []corev1.EnvVar{
 						{
 							Name: "ORG_ID",

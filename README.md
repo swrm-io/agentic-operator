@@ -38,6 +38,9 @@ kubectl create secret generic claude-credentials \
 kubectl label secret claude-credentials agentic.swrm.io/token-refresh=enabled
 ```
 
+> **Important:** After copying your credentials to the secret, run `claude logout` on the machine you used to log in. The OAuth refresh token rotates on every use — if your local Claude Code and the operator both attempt a refresh, one will invalidate the other's refresh token, causing authentication failures. The operator is the only process that should be refreshing these credentials.
+
+
 ### API Key
 
 Supported for `ClaudeJob` only. Cannot be used with `ClaudeSession` (Remote Control requires a claude.ai OAuth token).
