@@ -137,6 +137,11 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 		},
 	}, session.Spec.Volumes...)
 
+	mcpVolume, mcpVolumeMount, mcpSidecars := buildMCPSidecars(session.Spec.McpServers)
+	if mcpVolume != nil {
+		volumes = append(volumes, *mcpVolume)
+	}
+
 	volumeMounts := append([]corev1.VolumeMount{
 		{
 			Name:      credentialsVolumeName,
@@ -150,6 +155,9 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 			SubPath:   ".claude.json",
 		},
 	}, session.Spec.VolumeMounts...)
+	if mcpVolume != nil {
+		volumeMounts = append(volumeMounts, mcpVolumeMount)
+	}
 
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -167,14 +175,14 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 				RunAsGroup: func() *int64 { gid := int64(1000); return &gid }(),
 				FSGroup:    func() *int64 { gid := int64(1000); return &gid }(),
 			},
-			Volumes:       volumes,
+			Volumes: volumes,
 			InitContainers: []corev1.Container{
 				{
 					Name:    "claude-config-init",
 					Image:   "busybox:1",
 					Command: []string{"sh", "-c"},
 					Args: []string{
-						`printf '{"hasCompletedOnboarding":true,"remoteDialogSeen":true,"remoteControlAtStartup":true,"oauthAccount":{"organizationUuid":"%s"},"projects":{"%s":{"hasTrustDialogAccepted":true,"allowedTools":[],"mcpServers":{}}}}' "$ORG_ID" "$WORK_DIR" > /claude-home/.claude.json`,
+						buildClaudeJSONScript(session.Spec.WorkDir, session.Spec.McpServers),
 					},
 					Env: []corev1.EnvVar{
 						{
@@ -201,7 +209,7 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 					},
 				},
 			},
-			Containers: []corev1.Container{
+			Containers: append([]corev1.Container{
 				{
 					Name:         "claude",
 					Image:        session.Spec.Image,
@@ -215,7 +223,7 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 						"--spawn", string(session.Spec.Spawn),
 					},
 				},
-			},
+			}, mcpSidecars...),
 		},
 	}
 }

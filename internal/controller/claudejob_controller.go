@@ -118,6 +118,12 @@ func (r *ClaudeJobReconciler) buildCronJob(job *agenticiov1alpha1.ClaudeJob) *ba
 	volumeMounts = append(volumeMounts, job.Spec.VolumeMounts...)
 	env := append(extraEnv, job.Spec.Env...)
 
+	mcpVolume, mcpVolumeMount, mcpSidecars := buildMCPSidecars(job.Spec.McpServers)
+	if mcpVolume != nil {
+		volumes = append(volumes, *mcpVolume)
+		volumeMounts = append(volumeMounts, mcpVolumeMount)
+	}
+
 	return &batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      job.Name,
@@ -134,10 +140,10 @@ func (r *ClaudeJobReconciler) buildCronJob(job *agenticiov1alpha1.ClaudeJob) *ba
 				Spec: batchv1.JobSpec{
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
-							RestartPolicy: corev1.RestartPolicyOnFailure,
-							Volumes:       volumes,
+							RestartPolicy:  corev1.RestartPolicyOnFailure,
+							Volumes:        volumes,
 							InitContainers: r.buildConfigInitContainer(job),
-							Containers: []corev1.Container{
+							Containers: append([]corev1.Container{
 								{
 									Name:         "claude",
 									Image:        job.Spec.Image,
@@ -151,7 +157,7 @@ func (r *ClaudeJobReconciler) buildCronJob(job *agenticiov1alpha1.ClaudeJob) *ba
 										job.Spec.Prompt,
 									},
 								},
-							},
+							}, mcpSidecars...),
 						},
 					},
 				},
@@ -172,7 +178,7 @@ func (r *ClaudeJobReconciler) buildConfigInitContainer(job *agenticiov1alpha1.Cl
 			Image:   "busybox:1",
 			Command: []string{"sh", "-c"},
 			Args: []string{
-				`printf '{"hasCompletedOnboarding":true,"remoteDialogSeen":true,"remoteControlAtStartup":true,"oauthAccount":{"organizationUuid":"%s"},"projects":{"%s":{"hasTrustDialogAccepted":true,"allowedTools":[],"mcpServers":{}}}}' "$ORG_ID" "$WORK_DIR" > /claude-home/.claude.json`,
+				buildClaudeJSONScript(job.Spec.WorkDir, job.Spec.McpServers),
 			},
 			Env: []corev1.EnvVar{
 				{

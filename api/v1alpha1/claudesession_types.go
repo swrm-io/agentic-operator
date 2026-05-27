@@ -61,6 +61,11 @@ type ClaudeSessionSpec struct {
 	// VolumeMounts to attach to the session container
 	// +optional
 	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty"`
+
+	// McpServers defines MCP server sidecars to run alongside the Claude container.
+	// Each server is accessible to Claude via a Unix socket at /mcp-sockets/<name>.sock.
+	// +optional
+	McpServers []MCPServer `json:"mcpServers,omitempty"`
 }
 
 // ClaudeSessionStatus defines the observed state of ClaudeSession

@@ -54,6 +54,11 @@ type ClaudeJobSpec struct {
 	// +optional
 	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty"`
 
+	// McpServers defines MCP server sidecars to run alongside the Claude container.
+	// Each server is accessible to Claude via a Unix socket at /mcp-sockets/<name>.sock.
+	// +optional
+	McpServers []MCPServer `json:"mcpServers,omitempty"`
+
 	// Suspend stops the CronJob from firing when true
 	// +optional
 	Suspend bool `json:"suspend,omitempty"`
@@ -74,6 +79,28 @@ type ClaudeJobAuth struct {
 	// Mutually exclusive with credentialsSecret.
 	// +optional
 	APIKeySecret *SecretKeyRef `json:"apiKeySecret,omitempty"`
+}
+
+// MCPServer defines a sidecar container running an MCP server alongside Claude.
+// The sidecar communicates with Claude via a Unix socket at /mcp-sockets/<name>.sock.
+type MCPServer struct {
+	// Name is a unique identifier for this MCP server, used as the socket filename
+	// and the key in Claude's mcpServers config.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^[a-z0-9-]+$`
+	Name string `json:"name"`
+
+	// Image is the container image for the MCP server
+	// +kubebuilder:validation:Required
+	Image string `json:"image"`
+
+	// Env contains environment variables for the MCP server container
+	// +optional
+	Env []corev1.EnvVar `json:"env,omitempty"`
+
+	// Args overrides the container arguments
+	// +optional
+	Args []string `json:"args,omitempty"`
 }
 
 // SecretKeyRef identifies a key within a Kubernetes Secret
