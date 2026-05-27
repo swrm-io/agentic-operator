@@ -12,11 +12,18 @@ env:
 
 jobs:
   build-operator:
-    name: Build and push operator image
-    runs-on: ubuntu-latest
+    name: Build operator image (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
 
@@ -34,25 +41,57 @@ jobs:
         id: meta
         run: echo "tag=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push operator image
+      - name: Build and push operator image digest
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: true
-          tags: |
-            ${{ env.OPERATOR_IMAGE }}:${{ steps.meta.outputs.tag }}
-            ${{ env.OPERATOR_IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=min
+          tags: ${{ env.OPERATOR_IMAGE }}:${{ steps.meta.outputs.tag }}-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+          cache-from: type=gha,scope=operator-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=operator-${{ matrix.platform }}
 
-  build-claude:
-    name: Build and push claude-code image
+  merge-operator:
+    name: Merge operator multi-platform manifest
     runs-on: ubuntu-latest
+    needs: build-operator
     permissions:
       contents: read
       packages: write
+    steps:
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract tag
+        id: meta
+        run: echo "tag=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push manifest
+        run: |
+          docker buildx imagetools create \
+            --tag ${{ env.OPERATOR_IMAGE }}:${{ steps.meta.outputs.tag }} \
+            --tag ${{ env.OPERATOR_IMAGE }}:latest \
+            ${{ env.OPERATOR_IMAGE }}:${{ steps.meta.outputs.tag }}-amd64 \
+            ${{ env.OPERATOR_IMAGE }}:${{ steps.meta.outputs.tag }}-arm64
+
+  build-claude:
+    name: Build claude-code image (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
 
@@ -70,18 +109,43 @@ jobs:
         id: meta
         run: echo "tag=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push claude-code image
+      - name: Build and push claude-code image digest
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile.claude
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: true
-          tags: |
-            ${{ env.CLAUDE_IMAGE }}:${{ steps.meta.outputs.tag }}
-            ${{ env.CLAUDE_IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=min
+          tags: ${{ env.CLAUDE_IMAGE }}:${{ steps.meta.outputs.tag }}-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+          cache-from: type=gha,scope=claude-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=claude-${{ matrix.platform }}
+
+  merge-claude:
+    name: Merge claude-code multi-platform manifest
+    runs-on: ubuntu-latest
+    needs: build-claude
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract tag
+        id: meta
+        run: echo "tag=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push manifest
+        run: |
+          docker buildx imagetools create \
+            --tag ${{ env.CLAUDE_IMAGE }}:${{ steps.meta.outputs.tag }} \
+            --tag ${{ env.CLAUDE_IMAGE }}:latest \
+            ${{ env.CLAUDE_IMAGE }}:${{ steps.meta.outputs.tag }}-amd64 \
+            ${{ env.CLAUDE_IMAGE }}:${{ steps.meta.outputs.tag }}-arm64
 
   release:
     name: Create GitHub release with binaries
