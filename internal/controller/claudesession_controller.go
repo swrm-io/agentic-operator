@@ -162,6 +162,11 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 		},
 		Spec: corev1.PodSpec{
 			RestartPolicy: corev1.RestartPolicyAlways,
+			SecurityContext: &corev1.PodSecurityContext{
+				RunAsUser:  func() *int64 { uid := int64(1000); return &uid }(),
+				RunAsGroup: func() *int64 { gid := int64(1000); return &gid }(),
+				FSGroup:    func() *int64 { gid := int64(1000); return &gid }(),
+			},
 			Volumes:       volumes,
 			InitContainers: []corev1.Container{
 				{
@@ -170,9 +175,6 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 					Command: []string{"sh", "-c"},
 					Args: []string{
 						`printf '{"hasCompletedOnboarding":true,"remoteDialogSeen":true,"remoteControlAtStartup":true,"oauthAccount":{"organizationUuid":"%s"},"projects":{"%s":{"hasTrustDialogAccepted":true,"allowedTools":[],"mcpServers":{}}}}' "$ORG_ID" "$WORK_DIR" > /claude-home/.claude.json`,
-					},
-					SecurityContext: &corev1.SecurityContext{
-						RunAsUser: func() *int64 { uid := int64(1000); return &uid }(),
 					},
 					Env: []corev1.EnvVar{
 						{
