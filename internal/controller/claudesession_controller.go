@@ -114,6 +114,9 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 
 	volumes := append([]corev1.Volume{
 		{
+			// Mounted as a whole directory (no subPath) so kubelet keeps the
+			// contents live when the TokenRefresher updates the Secret.
+			// subPath mounts do NOT receive Secret updates after pod start.
 			Name: credentialsVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
@@ -128,10 +131,9 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 			},
 		},
 		{
-			// emptyDir shared between init container and main container.
-			// The init container writes ~/.claude.json with minimal account
-			// metadata (organizationUuid) that claude requires for Remote
-			// Control eligibility checks.
+			// emptyDir for .claude/ and .claude.json — writable by the node user.
+			// The init container writes .claude.json and symlinks .credentials.json
+			// → the live credentials mount so token refreshes are picked up.
 			Name:         claudeHomeVolume,
 			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
 		},
@@ -143,11 +145,17 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 	}
 
 	volumeMounts := append([]corev1.VolumeMount{
+		// Mount the live credentials secret directory at a staging path.
 		{
 			Name:      credentialsVolumeName,
-			MountPath: claudeConfigDir + "/.credentials.json",
-			SubPath:   "credentials.json",
+			MountPath: "/credentials",
 			ReadOnly:  true,
+		},
+		// Mount the writable emptyDir as .claude/ so Claude can write session state.
+		{
+			Name:      claudeHomeVolume,
+			MountPath: claudeConfigDir,
+			SubPath:   ".claude",
 		},
 		{
 			Name:      claudeHomeVolume,
@@ -182,7 +190,12 @@ func (r *ClaudeSessionReconciler) buildPod(session *agenticiov1alpha1.ClaudeSess
 					Image:   "busybox:1",
 					Command: []string{"sh", "-c"},
 					Args: []string{
-						buildClaudeJSONScript(session.Spec.WorkDir, session.Spec.McpServers),
+						// Create .claude/ on the emptyDir, symlink .credentials.json to the
+						// live secret mount (whole-dir mount updates automatically when the
+						// TokenRefresher rotates the Secret), then write .claude.json.
+						`mkdir -p /claude-home/.claude && ` +
+							`ln -sf /credentials/credentials.json /claude-home/.claude/.credentials.json && ` +
+							buildClaudeJSONScript(session.Spec.WorkDir, session.Spec.McpServers),
 					},
 					Env: []corev1.EnvVar{
 						{
