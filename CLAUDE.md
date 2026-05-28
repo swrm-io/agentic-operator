@@ -40,7 +40,7 @@ Makefile                     # Build, generate, deploy targets
 
 - **One resource per task/session** — `ClaudeJob` and `ClaudeSession` are 1:1 with a `CronJob` or `Pod`. No list-of-jobs inside one resource.
 - **Auth is mutually exclusive** — `ClaudeJob.spec.auth` has exactly one of `credentialsSecret` (OAuth) or `apiKeySecret` (API key). `validateAuth()` enforces this at reconcile time.
-- **Token refresh is centralised** — only the `TokenRefresher` goroutine ever writes back to credentials Secrets. Pods mount credentials read-only. This prevents the OAuth refresh-token race. The refresher caches `expiresAt` per secret and sleeps until the next token is due — no periodic polling.
+- **Token refresh is centralised** — only the `TokenRefresher` goroutine ever writes back to credentials Secrets. Pods mount credentials read-only (`ro` at the kernel level), so Claude Code inside the pod cannot attempt a refresh even if it detects an expired token. This prevents the OAuth refresh-token race where two concurrent refreshes invalidate each other. The refresher caches `expiresAt` per secret and sleeps until the next token is due — no periodic polling.
 - **No Anthropic-published image** — Anthropic does not publish a Docker image. `Dockerfile.claude` builds one from `@anthropic-ai/claude-code` on npm.
 
 ## OAuth token internals
