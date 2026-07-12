@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -39,6 +40,11 @@ const (
 
 	// refreshBefore is how early to refresh before the token expires.
 	refreshBefore = 5 * time.Minute
+
+	// failureBackoff is how long to wait before retrying a secret whose
+	// refresh attempt failed, so a stuck secret (e.g. one that is already
+	// past its expiry) doesn't spin the loop with no delay between tries.
+	failureBackoff = 30 * time.Second
 )
 
 // claudeCredentials mirrors the structure of ~/.claude/.credentials.json
@@ -75,6 +81,28 @@ type tokenRefreshResponse struct {
 type cacheEntry struct {
 	key       string    // data key within the Secret (e.g. "credentials.json")
 	expiresAt time.Time // when the current access token expires
+
+	// retryAfter, when non-zero, overrides expiresAt-based scheduling:
+	// the secret is not due again until this time. Set after a failed
+	// refresh attempt so the loop backs off instead of busy-looping on a
+	// secret whose token is already past expiry.
+	retryAfter time.Time
+}
+
+// invalidGrantError indicates the OAuth server rejected the refresh token
+// itself (not just the access token) as expired or revoked. This is
+// unrecoverable without a human rotating the credential — retrying will
+// never succeed, so the caller must stop scheduling further attempts.
+type invalidGrantError struct {
+	err error
+}
+
+func (e *invalidGrantError) Error() string { return e.err.Error() }
+func (e *invalidGrantError) Unwrap() error { return e.err }
+
+func isInvalidGrant(err error) bool {
+	var ig *invalidGrantError
+	return errors.As(err, &ig)
 }
 
 // TokenRefresher watches Secrets labelled with RefreshLabel and proactively
@@ -89,9 +117,13 @@ type TokenRefresher struct {
 	client     client.Client
 	httpClient *http.Client
 
-	mu      sync.Mutex
-	cache   map[types.NamespacedName]cacheEntry
-	wakeup  chan struct{} // closed and replaced to wake the sleep loop early
+	// tokenURL is the OAuth token endpoint. Defaults to claudeTokenURL;
+	// overridable in tests.
+	tokenURL string
+
+	mu     sync.Mutex
+	cache  map[types.NamespacedName]cacheEntry
+	wakeup chan struct{} // closed and replaced to wake the sleep loop early
 }
 
 // NewTokenRefresher creates a TokenRefresher using the manager's client.
@@ -99,6 +131,7 @@ func NewTokenRefresher(c client.Client) *TokenRefresher {
 	return &TokenRefresher{
 		client:     c,
 		httpClient: &http.Client{Timeout: 15 * time.Second},
+		tokenURL:   claudeTokenURL,
 		cache:      make(map[types.NamespacedName]cacheEntry),
 		wakeup:     make(chan struct{}),
 	}
@@ -160,7 +193,7 @@ func (t *TokenRefresher) Start(ctx context.Context) error {
 		if sleep <= 0 {
 			// Due now.
 			if err := t.refreshSecret(ctx, key); err != nil {
-				logger.Error(err, "failed to refresh token", "secret", key)
+				t.handleRefreshFailure(ctx, key, err)
 			}
 			continue
 		}
@@ -176,16 +209,35 @@ func (t *TokenRefresher) Start(ctx context.Context) error {
 			timer.Stop()
 		case <-timer.C:
 			if err := t.refreshSecret(ctx, key); err != nil {
-				logger.Error(err, "failed to refresh token", "secret", key)
-				// Back off briefly before retrying so we don't hammer the API.
-				select {
-				case <-ctx.Done():
-					return nil
-				case <-time.After(30 * time.Second):
-				}
+				t.handleRefreshFailure(ctx, key, err)
 			}
 		}
 	}
+}
+
+// handleRefreshFailure records a failed refresh attempt against the cache.
+// An invalid_grant error means the refresh token itself is dead — retrying
+// can never succeed, so the secret is dropped from the schedule entirely
+// until a human rotates the credential (the watch will pick it back up when
+// the Secret is next updated). Any other error is treated as transient and
+// gets a backoff so the loop doesn't spin with zero delay between attempts.
+func (t *TokenRefresher) handleRefreshFailure(ctx context.Context, key types.NamespacedName, err error) {
+	logger := log.FromContext(ctx).WithName("token-refresher")
+
+	if isInvalidGrant(err) {
+		logger.Error(err, "refresh token is no longer valid — a human must rotate this credential; "+
+			"no further automatic refresh attempts will be made for this secret", "secret", key)
+		t.removeFromCache(key)
+		return
+	}
+
+	logger.Error(err, "failed to refresh token, will retry after backoff", "secret", key, "backoff", failureBackoff)
+	t.mu.Lock()
+	if e, ok := t.cache[key]; ok {
+		e.retryAfter = time.Now().Add(failureBackoff)
+		t.cache[key] = e
+	}
+	t.mu.Unlock()
 }
 
 // seedCache does the initial List to populate the cache on startup.
@@ -278,6 +330,9 @@ func (t *TokenRefresher) nextRefreshIn() (time.Duration, types.NamespacedName, b
 
 	for k, e := range t.cache {
 		due := e.expiresAt.Add(-refreshBefore)
+		if due.Before(e.retryAfter) {
+			due = e.retryAfter
+		}
 		if first || due.Before(earliest) {
 			earliest = due
 			earliestKey = k
@@ -363,7 +418,7 @@ func (t *TokenRefresher) doRefresh(ctx context.Context, refreshToken string) (*t
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, claudeTokenURL, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.tokenURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -381,7 +436,15 @@ func (t *TokenRefresher) doRefresh(ctx context.Context, refreshToken string) (*t
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("token endpoint returned %d: %s", resp.StatusCode, string(respBody))
+		baseErr := fmt.Errorf("token endpoint returned %d: %s", resp.StatusCode, string(respBody))
+
+		var oauthErr struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(respBody, &oauthErr) == nil && oauthErr.Error == "invalid_grant" {
+			return nil, &invalidGrantError{err: baseErr}
+		}
+		return nil, baseErr
 	}
 
 	var result tokenRefreshResponse
