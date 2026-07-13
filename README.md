@@ -31,7 +31,10 @@ hack/setup-credentials.sh
 Run it again any time to rotate the credential — e.g. if the refresh token
 has expired and the operator's logs show `invalid_grant` errors. It accepts
 `--namespace`, `--secret-name`, and `--key` flags if you're not using the
-defaults below.
+defaults below. If you pass a non-default `--key`, the script also sets the
+matching `agentic.swrm.io/credentials-key` annotation on the Secret
+automatically, so the operator's TokenRefresher continues to find and
+refresh the credential correctly.
 
 Alternatively, to set it up manually:
 

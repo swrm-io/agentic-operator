@@ -59,11 +59,13 @@ require_command claude "Install it from https://code.claude.com/docs/en/quicksta
 require_command kubectl "Install it from https://kubernetes.io/docs/tasks/tools/."
 require_command jq "Install it from https://jqlang.org/download/."
 
-if ! kubectl auth can-i create secrets -n "${NAMESPACE}" >/dev/null 2>&1; then
-  echo "Error: cannot create Secrets in namespace '${NAMESPACE}'." >&2
-  echo "Check that kubectl is configured for the right cluster and you have permission (kubectl auth can-i create secrets -n ${NAMESPACE})." >&2
-  exit 1
-fi
+for verb in create get update patch; do
+  if ! kubectl auth can-i "${verb}" secrets -n "${NAMESPACE}" >/dev/null 2>&1; then
+    echo "Error: cannot '${verb}' Secrets in namespace '${NAMESPACE}'." >&2
+    echo "Check that kubectl is configured for the right cluster and you have permission (kubectl auth can-i ${verb} secrets -n ${NAMESPACE})." >&2
+    exit 1
+  fi
+done
 
 echo "Preflight checks passed (claude, kubectl, jq found; can create Secrets in '${NAMESPACE}')."
 
@@ -123,6 +125,11 @@ fi
 
 kubectl label secret "${SECRET_NAME}" -n "${NAMESPACE}" \
   agentic.swrm.io/token-refresh=enabled --overwrite
+
+if [[ "${SECRET_KEY}" != "credentials.json" ]]; then
+  kubectl annotate secret "${SECRET_NAME}" -n "${NAMESPACE}" \
+    agentic.swrm.io/credentials-key="${SECRET_KEY}" --overwrite
+fi
 
 echo ""
 echo "Done. Secret '${SECRET_NAME}' in namespace '${NAMESPACE}' is ready"
