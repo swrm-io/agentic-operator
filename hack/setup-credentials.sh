@@ -78,3 +78,29 @@ if ! CLAUDE_CONFIG_DIR="${TMPDIR}" claude auth login; then
   echo "Error: 'claude auth login' failed or was cancelled." >&2
   exit 1
 fi
+
+CREDENTIALS_FILE="${TMPDIR}/.credentials.json"
+CLAUDE_JSON_FILE="${TMPDIR}/.claude.json"
+
+if [[ ! -f "${CREDENTIALS_FILE}" ]]; then
+  echo "Error: expected credentials file not found at ${CREDENTIALS_FILE} after login." >&2
+  exit 1
+fi
+
+if ! jq -e '.claudeAiOauth.accessToken' "${CREDENTIALS_FILE}" >/dev/null 2>&1; then
+  echo "Error: ${CREDENTIALS_FILE} does not contain the expected claudeAiOauth.accessToken field." >&2
+  exit 1
+fi
+
+if [[ ! -f "${CLAUDE_JSON_FILE}" ]]; then
+  echo "Error: expected config file not found at ${CLAUDE_JSON_FILE} after login." >&2
+  exit 1
+fi
+
+ORG_ID="$(jq -r '.oauthAccount.organizationUuid // empty' "${CLAUDE_JSON_FILE}")"
+if [[ -z "${ORG_ID}" ]]; then
+  echo "Error: could not find oauthAccount.organizationUuid in ${CLAUDE_JSON_FILE}." >&2
+  exit 1
+fi
+
+echo "Extracted credentials and organization UUID."
