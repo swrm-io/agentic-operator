@@ -66,3 +66,15 @@ if ! kubectl auth can-i create secrets -n "${NAMESPACE}" >/dev/null 2>&1; then
 fi
 
 echo "Preflight checks passed (claude, kubectl, jq found; can create Secrets in '${NAMESPACE}')."
+
+TMPDIR="$(mktemp -d "${TMPDIR:-/tmp}/claude-credentials-setup.XXXXXX")"
+cleanup() {
+  rm -rf "${TMPDIR}"
+}
+trap cleanup EXIT
+
+echo "Starting Claude login in an isolated sandbox (your real ~/.claude is not touched)..."
+if ! CLAUDE_CONFIG_DIR="${TMPDIR}" claude auth login; then
+  echo "Error: 'claude auth login' failed or was cancelled." >&2
+  exit 1
+fi
