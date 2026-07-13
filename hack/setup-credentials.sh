@@ -104,3 +104,29 @@ if [[ -z "${ORG_ID}" ]]; then
 fi
 
 echo "Extracted credentials and organization UUID."
+
+if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+  echo "Secret '${SECRET_NAME}' already exists in '${NAMESPACE}' — updating it."
+  kubectl create secret generic "${SECRET_NAME}" \
+    --namespace "${NAMESPACE}" \
+    --from-file="${SECRET_KEY}=${CREDENTIALS_FILE}" \
+    --from-literal="organizationId=${ORG_ID}" \
+    --dry-run=client -o yaml \
+    | kubectl apply -f -
+else
+  echo "Creating Secret '${SECRET_NAME}' in '${NAMESPACE}'."
+  kubectl create secret generic "${SECRET_NAME}" \
+    --namespace "${NAMESPACE}" \
+    --from-file="${SECRET_KEY}=${CREDENTIALS_FILE}" \
+    --from-literal="organizationId=${ORG_ID}"
+fi
+
+kubectl label secret "${SECRET_NAME}" -n "${NAMESPACE}" \
+  agentic.swrm.io/token-refresh=enabled --overwrite
+
+echo ""
+echo "Done. Secret '${SECRET_NAME}' in namespace '${NAMESPACE}' is ready"
+echo "(key: ${SECRET_KEY}, plus organizationId)."
+echo "It is labelled agentic.swrm.io/token-refresh=enabled, so the operator's"
+echo "TokenRefresher will keep it up to date automatically — no further"
+echo "manual steps needed."
