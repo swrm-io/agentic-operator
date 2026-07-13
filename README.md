@@ -20,6 +20,21 @@ A Kubernetes operator for running [Claude Code](https://code.claude.com) workloa
 
 ### OAuth (claude.ai login)
 
+The easiest way to set this up is `hack/setup-credentials.sh`, which runs
+the login in an isolated sandbox (your real `~/.claude` is never touched)
+and creates or updates the Secret for you:
+
+```bash
+hack/setup-credentials.sh
+```
+
+Run it again any time to rotate the credential — e.g. if the refresh token
+has expired and the operator's logs show `invalid_grant` errors. It accepts
+`--namespace`, `--secret-name`, and `--key` flags if you're not using the
+defaults below.
+
+Alternatively, to set it up manually:
+
 Required for `ClaudeSession`. Supported for `ClaudeJob`. Enables automatic token refresh.
 
 ```bash
